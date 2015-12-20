@@ -1,80 +1,134 @@
 import React, { PropTypes } from 'react';
+import { History } from 'react-router';
 import { contain } from 'thundercats-react';
-import { PanelGroup, Thumbnail, Panel, Well } from 'react-bootstrap';
-import moment from 'moment';
+
+import ShowJob from './ShowJob.jsx';
+import JobNotFound from './JobNotFound.jsx';
+import { isJobValid } from '../utils';
+
+function shouldShowApply(
+  {
+    isFrontEndCert: isFrontEndCertReq = false,
+    isFullStackCert: isFullStackCertReq = false
+  }, {
+    isFrontEndCert = false,
+    isFullStackCert = false
+  }
+) {
+  return (!isFrontEndCertReq && !isFullStackCertReq) ||
+    (isFullStackCertReq && isFullStackCert) ||
+    (isFrontEndCertReq && isFrontEndCert);
+}
+
+function generateMessage(
+  {
+    isFrontEndCert: isFrontEndCertReq = false,
+    isFullStackCert: isFullStackCertReq = false
+  },
+  {
+    isFrontEndCert = false,
+    isFullStackCert = false,
+    isSignedIn = false
+  }
+) {
+
+  if (!isSignedIn) {
+    return 'Must be signed in to apply';
+  }
+  if (isFrontEndCertReq && !isFrontEndCert) {
+    return 'This employer requires Free Code Camp’s Front ' +
+      'End Development Certification in order to apply';
+  }
+  if (isFullStackCertReq && !isFullStackCert) {
+    return 'This employer requires Free Code Camp’s Full ' +
+      'Stack Development Certification in order to apply';
+  }
+  if (isFrontEndCertReq && isFrontEndCertReq) {
+    return 'This employer requires the Front End Development Certification. ' +
+      "You've earned it, so feel free to apply.";
+  }
+  return 'This employer requires the Full Stack Development Certification. ' +
+    "You've earned it, so feel free to apply.";
+}
 
 export default contain(
   {
+    stores: ['appStore', 'jobsStore'],
+    fetchWaitFor: 'jobsStore',
+    fetchAction: 'jobActions.getJob',
+    combineLatest(
+      { username, isFrontEndCert, isFullStackCert },
+      { currentJob }
+    ) {
+      return {
+        username,
+        job: currentJob,
+        isFrontEndCert,
+        isFullStackCert
+      };
+    },
+    getPayload({ params: { id }, job = {} }) {
+      return {
+        id,
+        isPrimed: job.id === id
+      };
+    },
+    // using es6 destructuring
+    shouldContainerFetch({ job = {} }, { params: { id } }
+    ) {
+      return job.id !== id;
+    }
   },
   React.createClass({
-    displayName: 'ShowJobs',
+    displayName: 'Show',
 
     propTypes: {
-      jobs: PropTypes.array
+      job: PropTypes.object,
+      isFullStackCert: PropTypes.bool,
+      isFrontEndCert: PropTypes.bool,
+      username: PropTypes.string
     },
 
-    renderJobs(jobs =[]) {
-      const thumbnailStyle = {
-        backgroundColor: 'white',
-        maxHeight: '200px',
-        maxWidth: '200px'
-      };
-      return jobs.map((
-        {
-          id,
-          company,
-          position,
-          description,
-          logo,
-          city,
-          state,
-          email,
-          phone,
-          postedOn
-        },
-        index
-      ) => {
-        const header = (
-          <div>
-            <h4 style={{ display: 'inline-block' }}>{ company }</h4>
-            <h5
-              className='pull-right hidden-xs hidden-md'
-              style={{ display: 'inline-block' }}>
-              { position }
-            </h5>
-          </div>
-        );
-        return (
-          <Panel
-            collapsible={ true }
-            eventKey={ index }
-            header={ header }
-            key={ id }>
-            <Well>
-              <Thumbnail
-                alt='200x200' src={ logo }
-                style={ thumbnailStyle } />
-              <Panel>
-                Position: { position }
-                Location: { city }, { state }
-                <br />
-                Contact: { email || phone || 'N/A' }
-                <br />
-                Posted On: { moment(postedOn).format('MMMM Do, YYYY') }
-              </Panel>
-              <p>{ description }</p>
-            </Well>
-          </Panel>
-        );
-      });
+    mixins: [History],
+
+    componentDidMount() {
+      const { job } = this.props;
+      // redirect user in client
+      if (!isJobValid(job)) {
+        this.history.pushState(null, '/jobs');
+      }
     },
 
     render() {
-      const { jobs } = this.props;
+      const {
+        isFullStackCert,
+        isFrontEndCert,
+        job,
+        username
+      } = this.props;
+
+      if (!isJobValid(job)) {
+        return <JobNotFound />;
+      }
+
+      const isSignedIn = !!username;
+
+      const showApply = shouldShowApply(
+        job,
+        { isFrontEndCert, isFullStackCert }
+      );
+
+      const message = generateMessage(
+        job,
+        { isFrontEndCert, isFullStackCert, isSignedIn }
+      );
+
       return (
-        <PanelGroup>
-          { this.renderJobs(jobs) }
-        </PanelGroup>
+        <ShowJob
+          message={ message }
+          preview={ false }
+          showApply={ showApply }
+          { ...this.props }/>
       );
     }
   })
