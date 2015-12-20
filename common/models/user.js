@@ -123,6 +123,14 @@ module.exports = function(User) {
     });
   });
 
+  User.beforeRemote('login', function(ctx, notUsed, next) {
+    const { body } = ctx.req;
+    if (body && typeof body.email === 'string') {
+      body.email = body.email.toLowerCase();
+    }
+    next();
+  });
+
   User.afterRemote('login', function(ctx, accessToken, next) {
     var res = ctx.res;
     var req = ctx.req;
@@ -156,7 +164,7 @@ module.exports = function(User) {
     req.flash('errors', {
       msg: 'Invalid username or password.'
     });
-    return res.redirect('/');
+    return res.redirect('/email-signin');
   });
 
   User.afterRemote('logout', function(ctx, result, next) {
@@ -314,7 +322,7 @@ module.exports = function(User) {
         })
         // no results means this is the first brownie point given by giver
         // so return -1 to indicate receiver should receive point
-        .firstOrDefault(null, -1)
+        .first({ defaultValue: -1 })
         .flatMap((browniePointsFromGiver) => {
           if (browniePointsFromGiver === -1) {
 
